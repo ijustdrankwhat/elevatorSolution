@@ -6,7 +6,7 @@
         var requests = [];
 
         var newElevators = [];
-        var reqFilter = function(floor,)
+        //var reqFilter = function(floor,)
         var request = function(floor,direction){
             var self = this;
             self.floor = floor;
@@ -104,7 +104,7 @@
                 self.elevator.checkDestinationQueue();
             });
 
-        }
+        };
 
 
         var findRightElevator = function(targetFloor, passengerDirection){
@@ -127,8 +127,8 @@
                     
         _.each(elevators,function(elevator){
             
-            newElevators.push(new Elevator(elevator,Math.floor(Math.random()*2)*8));
-
+            newElevators.push(new Elevator(elevator,0));
+            //Math.floor(Math.random()*2)*8)
             elevator.on("floor_button_pressed", function(floorNum){
                 
                 elevator.goToFloor(floorNum);
@@ -161,7 +161,9 @@
                         elevator.goingDownIndicator(true);
                     }
                 } */
-                
+                //THIS IS WHERE WE SHOULD CHECK AMICLOSER
+
+
             });
 
             elevator.on("stopped_at_floor", function(floorNum){
@@ -175,12 +177,26 @@
             up[floor.floorNum()] = false;
             down[floor.floorNum()] = false;
             floor.on("up_button_pressed", function(){
-                //alert("up");
-                var elv = findRightElevator(floor.floorNum(), "up");
-                //alert("afterFind");
+                
+                var filtered = requests.filter(function(req){
+                    return req.floor == floor.floorNum() && req.direction == "up";
+                });
+                
+                if(filtered.length>0){
+                    //TODO: Do some calculation about whether or not there's a closer elevator than the one On The way
+                }
+                else{
+                    var elv = findRightElevator(floor.floorNum(), "up");
+                    elv.goToFloor(floor.floorNum());
+                }
+                
+              //  var elv = findRightElevator(floor.floorNum(), "up");
+              //  elv.goToFloor(floor.floorNum());
+              //  requests.push(new request(floor.floorNum(),"up"));
+                
                 ////alert(elv.currentFloor);
                 //alert(elv);
-                elv.goToFloor(floor.floorNum());
+                
                 //alert("afterGoTo");
                 /*up[floor.floorNum()] = true;
                 var idle = idleElevators();
@@ -193,15 +209,36 @@
             });
 
             floor.on("down_button_pressed", function(){
-                var filtered = requests.filter(function(req, floorNum){
-                    return req.floor == floorNum && req.direction = direction;
+               
+                var filtered = requests.filter(function(req){
+                    return req.floor == floor.floorNum() && req.direction == "down";
+                });
+                
+                if(filtered.length>0){
+                    //TODO: Do some calculation about whether or not there's a closer elevator than the one On The way
+                }
+                else{
+                    var elv = findRightElevator(floor.floorNum(), "down");
+                    elv.goToFloor(floor.floorNum());
+                }
+                
+                
+              //  var filtered = requests.filter(function(req){
+              //      return req.floor == floor.floorNum() && req.direction == "down";
+              //  });
+              //  
+              //  var elv = findRightElevator(floor.floorNum(), "down");
+              //  elv.goToFloor(floor.floorNum());
+              //  requests.push(new request(floor.floorNum(),"down"));
+                /*  var filtered = requests.filter(function(req, floorNum){
+                    return req.floor == floorNum && req.direction == direction;
                 });
 
                 var elv = findRightElevator(floor.floorNum(), "down");
                 elv.goToFloor(floor.floorNum());
-                requests.push(new request(floor.floorNum(),"down"));
+                
 
-               /* down[floor.floorNum()] = true;
+                down[floor.floorNum()] = true;
                 var idle = idleElevators();
                 
                 if(idle.length>0)
@@ -211,10 +248,6 @@
                 }*/
             });
         });
-
-
-        
-
     },
     update: function(dt, elevators, floors) {
         // We normally don't need to do anything here
