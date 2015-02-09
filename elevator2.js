@@ -4,7 +4,8 @@
         var up = [];
         var down = [];
         var requests = [];
-
+      
+        var GEN_THRESHOLD = .8;
         var newElevators = [];
         //var reqFilter = function(floor,)
         var request = function(floor,direction){
@@ -12,85 +13,97 @@
             self.floor = floor;
             self.direction = direction;
             self.elv = null;    
-            self.sendAnElevator = function(elevator){
-                if(self.elv!=null){
-                    //Remove item from the destination queue and commit it.  
-                    self.elv.destinationQueue.splice(self.elv.destinationQueue.indexOf(floor));
-                    self.elv.checkDestinationQueue();
-                }
-                elevator.goToFloor(self.floor);
-                self.elv=elevator;
-            }
-
-            self.amICloser = function(elevator){
-                //TODO: do some logic to see if the passed in elevator is more convenient than one already on the way.
-            }
+            
         }
 
-        var Elevator = function(elevator, baseFloor){
+        var Elevator = function(elevator, baseFloor, isDefaultHome){
             baseFloor= baseFloor || 0;
             var self = this;
             self.elevator = elevator;
+            self.isDefaultHome = isDefaultHome;
+            
+            //DIRECTION IS REFLECTIVE OF TARGET DIRECTION NOT ACTUAL DIRECTION
             self.direction = "idle";
             self.prevFloor = 0;
-            self.state = "idle";
+            
             self.requests = [];
-            self.isGoingTo = function(floorNum) {
-                return self.elevator.destinationQueue.indexOf(floorNum) != -1;
-            };
+            
 
             self.isFull = function() {
-                return self.elevator.loadFactor() > 0.4;
+                
+                    return self.elevator.loadFactor()> GEN_THRESHOLD;
             };
 
-            self.goToFloorScore = function(targetFloor, passengerDirection) {
-                //alert("goToScore");
-                if(self.state == "idle")
-                    return Math.abs(self.elevator.currentFloor() - targetFloor);
-                if(self.isFull())
-                    return 10000;
-                if(self.direction == "up"){
-                    if(self.elevator.currentFloor < targetFloor)
-                    {
-                        return targetFloor - self.elevator.currentFloor();
-                    }
-                    else
-                    {
-                        return ((self.elevators.length +1) - currentFloor) +
-                                ((self.elevators.length+1) -targetFloor) +
-                                self.elevator.destinationQueue.length;
-                    }
+            self.addRequest = function(floorNum, direction){
+                self.requests.push(new request(floorNum,direction));
+                self.goToFloor(floorNum);
+                
+                self.elevator.destinationQueue.sort(function(a,b){return a-b});
+                if(self.elevator.destinationQueue.length >0 && self.elevator.destinationQueue[0]<elevator.currentFloor()){
+                    self.elevator.destinationQueue.reverse();    
                 }
-                if(self.direction == "down"){
-                    if(self.elevator.currentFloor > targetFloor)
-                    {
-                        return targetFloor - self.elevator.currentFloor() + self.elevator.destinationQueue.length;
-                    }
-                    else
-                    {
-                        return (currentFloor) +
-                                (targetFloor) +
-                                self.elevator.destinationQueue.length;
-                    }
+                else{
+                    
                 }
-                return 10000;
+                self.elevator.checkDestinationQueue();
+            }
 
-            };
-            self.goToFloor = function(targetFloor){
-                //alert("inGoTo");
-                self.state = "InTransit";
-                self.elevator.goToFloor(targetFloor);
-            };
+            self.setDirection = function(direction){
+                self.direction=direction;
+                if(direction=="up"){
+                    elevator.goingUpIndicator(true);
+                    elevator.goingDownIndicator(false);
+                } else if (direction=="down"){
+                    elevator.goingUpIndicator(false);
+                    elevator.goingDownIndicator(true);
+                } else
+                {
+                    elevator.goingUpIndicator(true);
+                    elevator.goingDownIndicator(true);
+                }
+
+            }
 
             self.elevator.on("idle", function() {
-            // The elevator is idle, so let's go to all the floors (or did we forget one?)
-                self.elevator.goingUpIndicator(true);
-                self.elevator.goingDownIndicator(true);
-                self.elevator.goToFloor(baseFloor);
+                var curr = self.elevator.currentFloor();
+            /*    self.setDirection("idle");
+                
+                if(self.direction=="idle"){
+                    self.elevator.goToFloor(curr);
+                    self.direction="local";
+                }
+                else if(self.direction == "local"){*/
+                    if(self.isDefaultHome)
+                    {
+                        //alert();
+                        self.setDirection("idle");
+                        self.elevator.goToFloor(baseFloor);
+                    }
+                    else
+                    {
+                        if(curr>baseFloor)
+                            self.setDirection("down");
+                        else if (curr<baseFloor)
+                            self.setDirection("up");
+                        else if (baseFloor==curr){
+                            //alert(self.elevator.currentFloor());
+                            self.setDirection("idle");
+                        }
+                        self.elevator.goToFloor(curr);
+                        self.elevator.goToFloor(baseFloor);
+                        
+                    }
             });
 
             self.elevator.on("floor_button_pressed", function(floorNum){
-                self.goToFloor(floorNum);
+                if(self.direction == "idle")
+                {
+                    if(floorNum > self.elevator.currentFloor())
+                        self.setDirection("up");
+                    else if(floorNum < self.elevator.currentFloor())
+                        self.setDirection("down");
+                }
+                self.elevator.goToFloor(floorNum);
                 self.elevator.destinationQueue.sort(function(a,b){return a-b});
                 if(self.elevator.destinationQueue.length >0 && self.elevator.destinationQueue[0]<elevator.currentFloor()){
                     self.elevator.destinationQueue.reverse();
@@ -104,148 +117,104 @@
                 self.elevator.checkDestinationQueue();
             });
 
+            
+
+            self.elevator.on("passing_floor", function(floorNum,direction){
+                
+                //THIS IS WHERE WE SHOULD CHECK AMICLOSER
+                
+               
+                    if(self.direction == "up" && 
+                        !self.isFull() &&
+                        up[floorNum] == "yes") {
+
+                        up[floorNum] = "locked";
+                        self.elevator.goToFloor(floorNum, true);
+
+                    }
+                    if(self.direction == "down" && 
+                        !self.isFull() && 
+                        down[floorNum] == "yes") {
+
+                        down[floorNum] = "locked";
+                        self.elevator.goToFloor(floorNum, true);
+
+                    }
+                
+
+            });
+
+            self.elevator.on("stopped_at_floor", function(floorNum){
+                alert(floorNum);
+                if(self.direction=="up")
+                    up[floorNum]="no";
+                if(self.direction == "down")
+                    down[floorNum]="no";
+                
+                if(self.direction=="up" && self.elevator.currentFloor() == floors.length-1){
+                    self.setDirection("idle");
+                }
+
+                if(self.elevator.currentFloor() == floors.length-1 && self.direction=="idle"){
+                    self.elevator.goToFloor(0);
+                    self.setDirection("down");
+                }
+                //Make sure top elevator doesn't get stuck doing nothing
+                
+            });
+
         };
 
 
-        var findRightElevator = function(targetFloor, passengerDirection){
-            var lowest = 1000000;
-            var lowestElv = null;
-            _.each(newElevators, function(elv){
-                var score = elv.goToFloorScore(targetFloor, passengerDirection);
-                //alert(score);
-                if(score<lowest)
-                {
-                    lowest=score;
-                    lowestElv = elv;
-                }
-            });
-            //alert(lowestElv);
-            return lowestElv;
+
+        //If a floor is 
+        var visitedFloor = function(floorNum, direction){
+            var filtered = requests.filter(function(req){
+                   return req.floor == floor.floorNum() && req.direction == direction;
+               });
+            if(filtered.length>0){
+                var deleteMe = filtered[0];
+                requests.splice(requests.indexOf(deleteMe), 1);
+            }
+            
         }
 
         
-                    
+        var x = 1;
+        var floorNum = floors.length;
         _.each(elevators,function(elevator){
+            var isDefaultHome = false;
+            var newBaseLevel = 0;
+            if(x%2==0)
+            {
+                newBaseLevel=floors.length;
+            }
+          
+            x=x+1;
             
-            newElevators.push(new Elevator(elevator,0));
+            newElevators.push(new Elevator(elevator, newBaseLevel, false));
             //Math.floor(Math.random()*2)*8)
-            elevator.on("floor_button_pressed", function(floorNum){
-                
-                elevator.goToFloor(floorNum);
-                elevator.destinationQueue.sort(function(a,b){return a-b});
-                if(elevator.destinationQueue.length >0 && elevator.destinationQueue[0]<elevator.currentFloor()){
-                    elevator.destinationQueue.reverse();
-                    //elevator.goingUpIndicator(true);
-                    //elevator.goingDownIndicator(false);
-                }
-                else{
-                    //elevator.goingUpIndicator(false);
-                    //elevator.goingDownIndicator(true);
-                }
-                elevator.checkDestinationQueue();
-            });
 
-            elevator.on("passing_floor", function(floorNum,direction){
-                /*
-                if(direction=="up"){
-                    if(up[floorNum] && elevator.loadFactor()<0.6){
-                        elevator.goToFloor(floorNum, true);
-                        elevator.goingUpIndicator(true);
-                        elevator.goingDownIndicator(false);
-                    }
-                }
-                if(direction=="down"){
-                    if(down[floorNum] && elevator.loadFactor()<0.6){
-                        elevator.goToFloor(floorNum, true);
-                        elevator.goingUpIndicator(false);
-                        elevator.goingDownIndicator(true);
-                    }
-                } */
-                //THIS IS WHERE WE SHOULD CHECK AMICLOSER
-
-
-            });
-
-            elevator.on("stopped_at_floor", function(floorNum){
-                up[floorNum]=false;
-                down[floorNum]=false;
-                
-            });
 
         });
         _.each(floors, function(floor){
-            up[floor.floorNum()] = false;
-            down[floor.floorNum()] = false;
+            up[floor.floorNum()] = "no";
+            down[floor.floorNum()] = "no";
             floor.on("up_button_pressed", function(){
-                
-                var filtered = requests.filter(function(req){
-                    return req.floor == floor.floorNum() && req.direction == "up";
-                });
-                
-                if(filtered.length>0){
-                    //TODO: Do some calculation about whether or not there's a closer elevator than the one On The way
-                }
-                else{
-                    var elv = findRightElevator(floor.floorNum(), "up");
-                    elv.goToFloor(floor.floorNum());
-                }
-                
-              //  var elv = findRightElevator(floor.floorNum(), "up");
-              //  elv.goToFloor(floor.floorNum());
-              //  requests.push(new request(floor.floorNum(),"up"));
-                
-                ////alert(elv.currentFloor);
-                //alert(elv);
-                
-                //alert("afterGoTo");
-                /*up[floor.floorNum()] = true;
-                var idle = idleElevators();
-                
-                if(idle.length>0)
-                {
-                    var thisElv = idle.pop();
-                    safeGoTo(thisElv, floor.floorNum());
-                }*/
+                up[floor.floorNum()] = "yes";
+                //var newReq = new Request(floor.floorNum(),"up");
+                //requests.push(newReq);
+
+              
             });
 
             floor.on("down_button_pressed", function(){
-               
-                var filtered = requests.filter(function(req){
-                    return req.floor == floor.floorNum() && req.direction == "down";
-                });
+                down[floor.floorNum()] = "yes"; 
+                //var newReq = new Request(floor.floorNum(),"down");
+                //requests.push(newReq);
+              
                 
-                if(filtered.length>0){
-                    //TODO: Do some calculation about whether or not there's a closer elevator than the one On The way
-                }
-                else{
-                    var elv = findRightElevator(floor.floorNum(), "down");
-                    elv.goToFloor(floor.floorNum());
-                }
-                
-                
-              //  var filtered = requests.filter(function(req){
-              //      return req.floor == floor.floorNum() && req.direction == "down";
-              //  });
-              //  
-              //  var elv = findRightElevator(floor.floorNum(), "down");
-              //  elv.goToFloor(floor.floorNum());
-              //  requests.push(new request(floor.floorNum(),"down"));
-                /*  var filtered = requests.filter(function(req, floorNum){
-                    return req.floor == floorNum && req.direction == direction;
-                });
-
-                var elv = findRightElevator(floor.floorNum(), "down");
-                elv.goToFloor(floor.floorNum());
-                
-
-                down[floor.floorNum()] = true;
-                var idle = idleElevators();
-                
-                if(idle.length>0)
-                {
-                    var thisElv = idle.pop();
-                    safeGoTo(thisElv,floor.floorNum());
-                }*/
+              
             });
         });
     },
